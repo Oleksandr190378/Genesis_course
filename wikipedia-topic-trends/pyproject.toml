@@ -1,0 +1,61 @@
+[project]
+name = "wikipedia-topic-trends"
+version = "0.1.0"
+description = "Agent Skill: analyze Wikipedia pageview trends to inform B2C topic/language decisions."
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "numpy>=2.0",
+    "matplotlib>=3.9",
+    "structlog>=24.1",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+wikitrends = "wikitrends.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pypdf>=6.19.0",
+    "types-PyYAML>=6.0",
+]
+evals = [
+    "anthropic>=0.34",
+    "openai>=1.40",
+    "python-dotenv>=1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wikitrends"]
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = ["src"]
+strict = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_return_any = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

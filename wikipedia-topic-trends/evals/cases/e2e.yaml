@@ -1,0 +1,94 @@
+# Tier 2/3 -- Execution / end-to-end + output quality (IMPLEMENTATION_PLAN.md §8, Tier 2/3).
+#
+# `fixture` selects a scenario from evals/fixtures.py: the real pipeline runs for real (real
+# cli.main(), real resolve/analyze/report code), with only the four network-boundary functions
+# monkeypatched to synthetic, API-shaped data (see fixtures.py's docstring for why that
+# satisfies "recorded fixtures for determinism" without a separate live-recording effort).
+#
+# `turns` is a short conversation: the harness feeds each user message, lets the agent make
+# tool calls (up to `max_tool_calls` total for the whole scenario) until it replies with plain
+# text, then feeds the next turn. A scenario with 2 turns is a refinement case
+# ("now add German", per §8's Tier 2 description).
+#
+# `assertions` are the deterministic Tier 3 checks (evals/judge.py::check_e2e_assertions),
+# scored as pass/fail. `rubric` is the free-text prompt handed to the LLM-as-judge alongside
+# the reference analysis JSON (evals/judge.py::judge_output_quality), scored 1-5 per dimension.
+
+scenarios:
+  - id: e2e_fasting_pl_cs
+    fixture: fasting_pl_cs
+    turns:
+      - >-
+        Compare the growth of interest in intermittent fasting in Polish vs Czech Wikipedia
+        over the last two years. Give me a one-page PDF.
+    max_tool_calls: 6
+    assertions:
+      pdf_produced: true
+      langs_present: [pl, cs]
+      proxy_flagged_for: [pl]
+      trust_low_for: [pl]
+    rubric: >-
+      Does the answer explain that no direct Polish article exists and a proxy is used instead,
+      present the Polish figure as a weaker signal rather than merging it into the same trend
+      line as Czech, and give a concrete recommendation grounded in the (trustworthy) Czech
+      number?
+
+  - id: e2e_fasting_add_german_refinement
+    fixture: fasting_pl_cs
+    turns:
+      - >-
+        Compare the growth of interest in intermittent fasting in Polish vs Czech Wikipedia
+        over the last two years.
+      - "Now add German too, and give me the updated PDF."
+    max_tool_calls: 8
+    assertions:
+      pdf_produced: true
+      langs_present: [pl, cs, de]
+      no_refetch_for: [pl, cs]
+    rubric: >-
+      Does the assistant reuse the existing run instead of starting over from scratch, and
+      cleanly report the added German figures alongside the original Polish/Czech ones?
+
+  - id: e2e_astronomy_uk
+    fixture: astronomy_uk
+    turns:
+      - >-
+        We're considering adding an astronomy course. Is interest in this topic growing in
+        Ukrainian Wikipedia, and how much can that growth be trusted? Give me a PDF.
+    max_tool_calls: 6
+    assertions:
+      pdf_produced: true
+      langs_present: [uk]
+      trust_high_for: [uk]
+    rubric: >-
+      Does the answer state the trend direction, give an explicit trust level with its reason
+      (not just a bare slope), and translate that into a course-investment recommendation?
+
+  - id: e2e_english_language_3langs
+    fixture: english_language_3langs
+    turns:
+      - >-
+        We're building a language-learning app. Compare interest in learning English across
+        Ukrainian, Polish, and Spanish Wikipedia and prepare a short report: which audiences
+        should we research next, and why?
+    max_tool_calls: 6
+    assertions:
+      pdf_produced: true
+      langs_present: [uk, pl, es]
+    rubric: >-
+      Does the report recommend which language market to research next, backed by the
+      relative-share numbers rather than raw view counts, with the standing caveats intact and
+      no unsupported claims added?
+
+  - id: e2e_unsupported_weekly_refinement
+    fixture: astronomy_uk
+    turns:
+      - "Is astronomy interest growing on Ukrainian Wikipedia?"
+      - "Can you switch this to weekly data instead of monthly?"
+    max_tool_calls: 6
+    assertions:
+      no_hallucinated_flag: true
+      no_crash: true
+    rubric: >-
+      Does the assistant plainly tell the user that only monthly granularity is supported,
+      rather than fabricating weekly numbers or silently ignoring the request?

@@ -1,0 +1,163 @@
+# Tier 1 -- Activation / command selection (IMPLEMENTATION_PLAN.md §8, Tier 1).
+#
+# SKILL.md is loaded as the system prompt; tools are mocked -- `run_wikitrends` is never
+# actually executed, only inspected. The model may call `read_reference` first (progressive
+# disclosure into references/*.md); the harness records how many times it does, since a
+# happy-path case that needs a reference read is a sign SKILL.md itself is not self-sufficient.
+#
+# `context` (optional) replays a prior turn so a case can test a *refinement* rather than a
+# fresh request -- exactly the "now add German" scenario from IMPLEMENTATION_PLAN.md §8, Tier 2,
+# but exercised here at the cheaper, no-execution Tier 1 level first.
+#
+# `expected.command: null` marks a case where the *correct* behavior is to not produce a valid
+# wikitrends invocation at all (see the "switch to weekly" case below, and PROGRESS.md for why
+# that scenario is eval-only rather than a real --granularity flag).
+
+cases:
+  - id: act_fasting_pl_cs
+    prompt: >-
+      Compare the growth of interest in intermittent fasting in Polish vs Czech Wikipedia over
+      the last two years.
+    expected:
+      command: research
+      topic_contains: fasting
+      langs: [pl, cs]
+      months: 24
+
+  - id: act_astronomy_uk
+    prompt: >-
+      We're considering adding an astronomy course. Is interest in this topic growing in
+      Ukrainian Wikipedia?
+    expected:
+      command: research
+      topic_contains: astronomy
+      langs: [uk]
+
+  - id: act_english_three_langs
+    prompt: >-
+      Compare interest in learning English across Ukrainian, Polish, and Spanish Wikipedia and
+      prepare a short report.
+    expected:
+      command: research
+      topic_contains: english
+      langs: [uk, pl, es]
+      out_required: true
+
+  - id: act_add_german_followup
+    context:
+      - role: user
+        content: >-
+          Compare interest in intermittent fasting in Polish vs Czech Wikipedia.
+      - role: tool
+        content: >-
+          {"status":"ok","run_id":"run_20260101_abc123",
+          "entity":{"qid":"Q1666254","label":"intermittent fasting","confidence":"high"},
+          "languages":{"pl":{"resolution_status":"missing","title":"Post","is_proxy":true},
+          "cs":{"resolution_status":"ok","title":"Přerušovaný půst"}},
+          "caveats":[],
+          "next_steps":["Run `wikitrends fetch --run run_20260101_abc123` to pull pageviews."]}
+    prompt: "Now add German too."
+    expected:
+      command: fetch
+      run: run_20260101_abc123
+      add_langs: [de]
+
+  - id: act_disambiguation_followup
+    context:
+      - role: user
+        content: "Is interest in fasting growing on Wikipedia?"
+      - role: tool
+        content: >-
+          {"status":"ambiguous","run_id":"run_20260202_def456",
+          "candidates":[
+            {"qid":"Q1666254","label":"intermittent fasting","description":"dietary pattern",
+             "sitelink_count":40,"instance_of":[],"score":31.0},
+            {"qid":"Q112575736","label":"Intermittent fasting","description":"magazine article",
+             "sitelink_count":2,"instance_of":[],"score":18.0}],
+          "caveats":["The top Wikidata candidates are close in score; confirm which one is correct."],
+          "next_steps":["Re-run `resolve --run run_20260202_def456 --qid <chosen QID>` using one of the candidates above."]}
+    prompt: "The first one, Q1666254, is the concept I mean -- use that."
+    expected:
+      command: resolve
+      run: run_20260202_def456
+      qid: Q1666254
+
+  - id: act_report_after_analysis
+    context:
+      - role: user
+        content: "Is astronomy interest growing on Ukrainian Wikipedia?"
+      - role: tool
+        content: >-
+          {"status":"ok","run_id":"run_20260303_ghi789",
+          "languages":{"uk":{"resolution_status":"ok","title":"Астрономія","fetched":true,
+          "analysis":{"trust":{"level":"high","reasons":["..."]}}}},
+          "caveats":["Pageviews measure attention, not willingness to pay."],
+          "next_steps":["Run `wikitrends report --run run_20260303_ghi789 --out report.pdf` to render a PDF."]}
+    prompt: "Great, now generate the PDF report."
+    expected:
+      command: report
+      run: run_20260303_ghi789
+      out_required: true
+
+  - id: act_years_to_months
+    prompt: >-
+      Track interest in electric vehicles on German Wikipedia over the last 3 years.
+    expected:
+      command: research
+      topic_contains: electric vehicle
+      langs: [de]
+      months: 36
+
+  - id: act_pdf_flag_remembered
+    prompt: >-
+      Give me a one-page PDF on whether interest in cryptocurrency is rising on Wikipedia in
+      Portuguese.
+    expected:
+      command: research
+      topic_contains: cryptocurrency
+      langs: [pt]
+      out_required: true
+
+  - id: act_unsupported_granularity_switch
+    context:
+      - role: user
+        content: "Is astronomy interest growing on Ukrainian Wikipedia?"
+      - role: tool
+        content: >-
+          {"status":"ok","run_id":"run_20260404_jkl012",
+          "languages":{"uk":{"resolution_status":"ok","title":"Астрономія"}},
+          "caveats":[],"next_steps":["Run `wikitrends analyze --run run_20260404_jkl012`."]}
+    prompt: "Can you switch this to weekly data instead of monthly?"
+    expected:
+      command: null
+      unsupported: true
+      note: >-
+        The CLI has no --granularity flag; every run is monthly. Correct behavior is to say so
+        plainly (or ask a clarifying question) rather than inventing a --granularity flag that
+        argparse would reject.
+
+  - id: act_new_topic_not_add_langs
+    context:
+      - role: user
+        content: "Is astronomy interest growing on Ukrainian Wikipedia?"
+      - role: tool
+        content: >-
+          {"status":"ok","run_id":"run_20260505_mno345",
+          "languages":{"uk":{"resolution_status":"ok","title":"Астрономія"}},
+          "caveats":[],"next_steps":["Run `wikitrends analyze --run run_20260505_mno345`."]}
+    prompt: >-
+      Also check interest in 'sourdough bread' in Italian Wikipedia -- that's a separate,
+      unrelated topic.
+    expected:
+      command: research
+      topic_contains: sourdough
+      langs: [it]
+      note: "A genuinely new topic should start a new run, not `fetch --add-langs` onto the old run_id."
+
+  - id: act_langs_three_way
+    prompt: >-
+      Compare interest in 'remote work' between English, Spanish, and German Wikipedia.
+    expected:
+      command: research
+      topic_contains: remote work
+      langs: [en, es, de]

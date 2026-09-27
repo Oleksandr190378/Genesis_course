@@ -1,0 +1,193 @@
+# Tier 0 -- Discovery / trigger precision (IMPLEMENTATION_PLAN.md §8, Tier 0).
+#
+# Only `name` + `description` are shown to the model (see `catalog` below); the skill itself
+# is never executed. Each case is run 3x (evals/harness.py) and scored trigger/no_trigger per
+# run. Aggregated across all cases this yields trigger precision/recall/F1 for `target_skill`
+# (evals/judge.py) -- the number this whole tier exists to produce, so SKILL.md's `description`
+# can be tuned against evidence instead of intuition (§8.2).
+
+target_skill: wikipedia-topic-trends
+
+catalog:
+  - name: wikipedia-topic-trends
+    description: >-
+      Analyze Wikipedia pageview trends across language editions to gauge demand for a topic
+      and compare interest across languages, for B2C product decisions (which topic/course to
+      build, which language market to launch in). Produces trend direction, a machine-computed
+      trust score, and a one-page PDF report grounded in fetched pageview data. Not for
+      summarizing what a Wikipedia article says, answering static population/demographic facts,
+      editing Wikipedia, or plotting arbitrary user-supplied data.
+  - name: wikipedia-content-summarizer
+    description: >-
+      Fetches the current text of one or more Wikipedia articles and summarizes or explains
+      their content in plain language. Use for "what does this article say", condensing long
+      articles, or explaining a topic. Not for pageview statistics, trends, or demand analysis.
+  - name: wikipedia-editor
+    description: >-
+      Creates, edits, and proposes changes to Wikipedia articles via the MediaWiki API: fixing
+      typos, adding citations, drafting new pages. Not for reading analytics or pageview data.
+  - name: csv-data-plotter
+    description: >-
+      Loads a user-supplied CSV or spreadsheet and produces charts (bar, line, scatter) from
+      arbitrary tabular data the user already has on disk. Not for fetching external Wikipedia
+      data.
+  - name: population-and-country-facts
+    description: >-
+      Answers static factual questions about countries and regions -- population, area,
+      capital, currency -- from a reference dataset. Not for time-series or trend analysis.
+  - name: general-web-research
+    description: >-
+      Searches the web and synthesizes findings on open-ended questions, with citations. Not
+      for structured statistical analysis of a pageview time series.
+  - name: pdf-report-builder
+    description: >-
+      Assembles a polished PDF or slide deck from text and images the user already has. Does
+      not fetch or analyze any data itself.
+
+cases:
+  # --- Positives: expected == trigger -----------------------------------------------------
+  - id: pos_task_example_1
+    category: positive
+    query: >-
+      Compare the growth of interest in intermittent fasting in Polish vs Czech Wikipedia over
+      the last two years.
+    expected: trigger
+  - id: pos_task_example_2
+    category: positive
+    query: >-
+      We're considering adding an astronomy course. Is interest in this topic growing in
+      Ukrainian Wikipedia, and how much can that growth be trusted?
+    expected: trigger
+  - id: pos_task_example_3
+    category: positive
+    query: >-
+      We're building a language-learning app. Compare interest in learning English across our
+      chosen language editions and prepare a short report: which audiences should we research
+      next, and why?
+    expected: trigger
+  - id: pos_paraphrase_fasting
+    category: positive
+    query: >-
+      Has interest in fasting diets grown more on the Czech or the Polish Wikipedia over the
+      past 24 months?
+    expected: trigger
+  - id: pos_paraphrase_astronomy
+    category: positive
+    query: >-
+      Is there rising interest in astronomy on Ukrainian Wikipedia? How confident should we be
+      in that trend before we greenlight the course?
+    expected: trigger
+  - id: pos_indirect_gardening
+    category: positive
+    query: "Is anyone actually interested in home gardening in Spain these days?"
+    expected: trigger
+  - id: pos_language_launch_decision
+    category: positive
+    query: >-
+      Which language should we launch our meditation app in first, based on how Wikipedia
+      demand has been trending?
+    expected: trigger
+  - id: pos_kpop_cross_language
+    category: positive
+    query: >-
+      We want to know if K-pop is becoming more popular on German Wikipedia compared to French
+      Wikipedia.
+    expected: trigger
+  - id: pos_ev_three_languages
+    category: positive
+    query: >-
+      Track how interest in electric vehicles has changed on Wikipedia across the English,
+      German, and Japanese editions over the last 3 years.
+    expected: trigger
+  - id: pos_localize_finance
+    category: positive
+    query: >-
+      Before we localize, can you check whether curiosity about personal finance is trending
+      up on Wikipedia in Portuguese?
+    expected: trigger
+  - id: pos_pdf_crypto
+    category: positive
+    query: >-
+      Give me a one-page PDF report on whether cryptocurrency interest is rising across
+      Wikipedia language editions.
+    expected: trigger
+  - id: pos_trust_yoga
+    category: positive
+    query: "How much can we trust the claim that yoga interest is growing on Hindi Wikipedia?"
+    expected: trigger
+  - id: pos_terse_query
+    category: positive
+    query: "uk wikipedia astronomy trend?"
+    expected: trigger
+  - id: pos_remote_work_en_es
+    category: positive
+    query: "Compare Wikipedia pageview trends for 'remote work' in English vs Spanish."
+    expected: trigger
+
+  # --- Hard negatives: topically adjacent, expected == no_trigger -------------------------
+  - id: neg_hard_summarize_article
+    category: hard_negative
+    query: "Summarize the Wikipedia article on astronomy for me."
+    expected: no_trigger
+  - id: neg_hard_plot_csv
+    category: hard_negative
+    query: "Plot this CSV of monthly sales for me."
+    expected: no_trigger
+  - id: neg_hard_population_fact
+    category: hard_negative
+    query: "How many people live in Poland?"
+    expected: no_trigger
+  - id: neg_hard_edit_wikipedia
+    category: hard_negative
+    query: "Edit the Wikipedia page for our company to fix a typo in the founding date."
+    expected: no_trigger
+  - id: neg_hard_content_safety
+    category: hard_negative
+    query: "What does the Wikipedia article on intermittent fasting say about its safety?"
+    expected: no_trigger
+  - id: neg_hard_bar_chart_spreadsheet
+    category: hard_negative
+    query: "Make a bar chart from this spreadsheet of our website traffic."
+    expected: no_trigger
+  - id: neg_hard_population_wikipedia_sourced
+    category: hard_negative
+    query: "What's the population of Ukraine according to Wikipedia?"
+    expected: no_trigger
+  - id: neg_hard_draft_new_article
+    category: hard_negative
+    query: "Draft a new Wikipedia article about our startup."
+    expected: no_trigger
+  - id: neg_hard_translate_article
+    category: hard_negative
+    query: "Translate the Wikipedia article on astronomy into Ukrainian for me."
+    expected: no_trigger
+  - id: neg_hard_total_pageviews_factoid
+    category: hard_negative
+    query: "How many total pageviews did all of Wikipedia get last month?"
+    expected: no_trigger
+
+  # --- Easy negatives: unrelated dev tasks, expected == no_trigger ------------------------
+  - id: neg_easy_refactor
+    category: easy_negative
+    query: "Refactor this Python function to use list comprehensions."
+    expected: no_trigger
+  - id: neg_easy_unit_tests
+    category: easy_negative
+    query: "Write unit tests for my authentication module."
+    expected: no_trigger
+  - id: neg_easy_deploy_fastapi
+    category: easy_negative
+    query: "What's the best way to deploy a FastAPI app on AWS?"
+    expected: no_trigger
+  - id: neg_easy_sql_bug
+    category: easy_negative
+    query: "Fix this SQL query, it's returning duplicate rows."
+    expected: no_trigger
+  - id: neg_easy_cicd
+    category: easy_negative
+    query: "Help me set up CI/CD with GitHub Actions."
+    expected: no_trigger
+  - id: neg_easy_tcp_udp
+    category: easy_negative
+    query: "Explain the difference between TCP and UDP."
+    expected: no_trigger
